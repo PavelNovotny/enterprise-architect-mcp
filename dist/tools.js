@@ -6,6 +6,7 @@ import { configureDiagramTools } from "./tools/diagrams.js";
 import { configureScenarioTools } from "./tools/scenarios.js";
 import { configureSchemaTools } from "./tools/schema.js";
 import { configureResolveTools } from "./tools/resolve.js";
+import { configureDocumentTools } from "./tools/documents.js";
 export function configureAllTools(server, model) {
     configureSearchTools(server, model);
     configureElementTools(server, model);
@@ -15,4 +16,5 @@ export function configureAllTools(server, model) {
     configureScenarioTools(server, model);
     configureSchemaTools(server, model);
     configureResolveTools(server, model);
+    configureDocumentTools(server, model);
 }
