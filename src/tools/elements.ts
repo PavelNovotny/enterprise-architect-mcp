@@ -42,7 +42,8 @@ export function configureElementTools(server: McpServer, model: ModelAccess): vo
 
         // Get attributes
         const allAttributes = db.prepare(`
-          SELECT ID, Name, Type, Scope, Stereotype, Notes, LowerBound, UpperBound, "Default"
+          SELECT ID, Name, Type, Scope, Stereotype, Notes, LowerBound, UpperBound, "Default",
+                 Length, Precision, Scale
           FROM t_attribute
           WHERE Object_ID = ?
           ORDER BY Pos
@@ -58,6 +59,9 @@ export function configureElementTools(server: McpServer, model: ModelAccess): vo
           notes: decodeEntities(a.Notes),
           multiplicity: formatMultiplicity(a),
           default: a.Default,
+          length: a.Length,
+          precision: a.Precision,
+          scale: a.Scale,
         }));
 
         // Computed over every attribute, not the inline slice, so truncation cannot flip the flag.

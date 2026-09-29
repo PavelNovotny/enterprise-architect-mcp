@@ -27,7 +27,8 @@ export function configureElementTools(server, model) {
             }
             // Get attributes
             const allAttributes = db.prepare(`
-          SELECT ID, Name, Type, Scope, Stereotype, Notes, LowerBound, UpperBound, "Default"
+          SELECT ID, Name, Type, Scope, Stereotype, Notes, LowerBound, UpperBound, "Default",
+                 Length, Precision, Scale
           FROM t_attribute
           WHERE Object_ID = ?
           ORDER BY Pos
@@ -42,6 +43,9 @@ export function configureElementTools(server, model) {
                 notes: decodeEntities(a.Notes),
                 multiplicity: formatMultiplicity(a),
                 default: a.Default,
+                length: a.Length,
+                precision: a.Precision,
+                scale: a.Scale,
             }));
             // Computed over every attribute, not the inline slice, so truncation cannot flip the flag.
             const multiplicityIsUniform = new Set(allAttributes.map(formatMultiplicity).filter((m) => m !== undefined)).size < 2;
