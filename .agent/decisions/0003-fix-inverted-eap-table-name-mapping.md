@@ -1,4 +1,4 @@
-Status: Proposed
+Status: Done
 Date: 2026-09-29
 
 # Fix inverted EAP-to-QEA table name mapping

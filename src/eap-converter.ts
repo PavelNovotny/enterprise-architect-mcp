@@ -14,14 +14,14 @@ import type { Column } from "mdb-reader";
  * then queries via node:sqlite as if it were a .qea file.
  */
 
-/** Tables whose names differ between EAP and QEA. Key = EAP name, value = QEA name. */
+/** Tables whose names differ between EAP and QEA. Key = EAP name, value = name the tools expect. */
 const TABLE_NAME_MAP: Record<string, string> = {
-  t_operation: "t_objectoperations",
-  t_operationparams: "t_objectparams",
-  t_objecteffort: "t_objectefforts",
-  t_objectscenarios: "t_scenarios",
-  t_secgroup: "t_secroles",
-  t_secpolicies: "t_secpolperms",
+  t_objectoperations: "t_operation",
+  t_objectparams: "t_operationparams",
+  t_objectefforts: "t_objecteffort",
+  t_scenarios: "t_objectscenarios",
+  t_secroles: "t_secgroup",
+  t_secpolperms: "t_secpolicies",
 };
 
 /** MDB column type → SQLite column type. */
