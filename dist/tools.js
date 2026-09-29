@@ -7,6 +7,7 @@ import { configureScenarioTools } from "./tools/scenarios.js";
 import { configureSchemaTools } from "./tools/schema.js";
 import { configureResolveTools } from "./tools/resolve.js";
 import { configureDocumentTools } from "./tools/documents.js";
+import { configureOverviewTools } from "./tools/overview.js";
 export function configureAllTools(server, model) {
     configureSearchTools(server, model);
     configureElementTools(server, model);
@@ -17,4 +18,5 @@ export function configureAllTools(server, model) {
     configureSchemaTools(server, model);
     configureResolveTools(server, model);
     configureDocumentTools(server, model);
+    configureOverviewTools(server, model);
 }

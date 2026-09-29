@@ -1,4 +1,4 @@
-Status: Proposed
+Status: Done
 Date: 2026-09-29
 
 # Add ea_get_model_overview tool
