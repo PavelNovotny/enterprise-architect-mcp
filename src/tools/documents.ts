@@ -4,6 +4,7 @@ import { READ_ONLY } from "./annotations.js";
 import { z } from "zod";
 import { decodeEntities } from "../text.js";
 import { inflateRawSync } from "node:zlib";
+import { limitParam, offsetParam, buildContinuation, buildBreakdown, countBy } from "./windowing.js";
 
 /** Detect document format from the BLOB, peering inside ZIP for EA's RTF-in-ZIP. */
 function detectFormat(buf: Buffer): "docx" | "doc" | "rtf" | "unknown" {
@@ -165,6 +166,108 @@ export function configureDocumentTools(server: McpServer, model: ModelAccess): v
         const msg = error instanceof Error ? error.message : String(error);
         return {
           content: [{ type: "text" as const, text: `Error retrieving documents: ${msg}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "ea_list_documents",
+    "List all embedded documents in the model from `t_document`, joined to `t_object` to resolve the owning element. Each entry carries `docId`, `name`, `type`, `author`, `version`, `isActive`, `sequence`, `docDate`, `hasBinaryContent`, `hasStrContent`, and the linked element's `elementId`, `elementName`, `elementType`, and `packagePath`. Set `content: true` to also extract `textContent` (plain text) from binary documents. Use `offset` to page through large result sets; while rows remain, `continuation` names the next call. When far more documents match than one window can hold, `breakdown` reports how they distribute — by `docType` — so the next call can narrow instead of paging.",
+    {
+      limit: limitParam(50),
+      offset: offsetParam,
+      content: z.coerce.boolean().default(false).describe("When true, extract and return textContent (plain text) from binary documents"),
+    },
+    READ_ONLY,
+    async ({ limit, offset, content }) => {
+      const db = await model.database();
+      try {
+        const totalCount = (db.prepare("SELECT COUNT(*) as cnt FROM t_document").get() as { cnt: number }).cnt;
+
+        const rows = db.prepare(`
+          SELECT d.DocID, d.DocName, d.DocType, d.Author, d.Version,
+                 d.IsActive, d.Sequence, d.DocDate, d.Notes,
+                 d.StrContent IS NOT NULL as hasStrContent,
+                 d.BinContent IS NOT NULL as hasBinaryContent,
+                 o.Object_ID as elementId, o.Object_Type as elementType, o.Name as elementName,
+                 o.ea_guid as elementGuid
+          FROM t_document d
+          LEFT JOIN t_object o ON d.ElementID = o.ea_guid
+          ORDER BY d.Sequence
+          LIMIT ? OFFSET ?
+        `).all(limit, offset) as any[];
+
+        // Build breakdown by docType when result set is large
+        let breakdown: Record<string, any> | undefined;
+        if (totalCount > limit * 10) {
+          const allTypeCounts = countBy(
+            db.prepare("SELECT DocType FROM t_document WHERE DocType IS NOT NULL AND DocType != ''").all() as { DocType: string }[],
+            (r) => r.DocType
+          );
+          breakdown = buildBreakdown({ docType: allTypeCounts });
+        }
+
+        const documents = rows.map((r) => {
+          const doc: any = {
+            docId: r.DocID,
+            name: r.DocName,
+            type: r.DocType,
+            author: r.Author,
+            version: r.Version,
+            isActive: r.IsActive === 1,
+            sequence: r.Sequence,
+            docDate: r.DocDate,
+            notes: decodeEntities(r.Notes),
+            hasStrContent: r.hasStrContent === 1,
+            hasBinaryContent: r.hasBinaryContent === 1,
+            element: r.elementId != null
+              ? {
+                  elementId: r.elementId,
+                  name: r.elementName,
+                  type: r.elementType,
+                  guid: r.elementGuid,
+                }
+              : null,
+          };
+
+          if (content && r.hasBinaryContent === 1 && r.BinContent) {
+            const buf = Buffer.from(r.BinContent as Uint8Array);
+            doc.detectedFormat = detectFormat(buf);
+            const text = extractContent(buf);
+            if (text !== null) doc.textContent = text;
+          }
+
+          return doc;
+        });
+
+        const returned = documents.length;
+        const continuation = buildContinuation(
+          "ea_list_documents",
+          { limit, offset, content },
+          offset,
+          returned,
+          totalCount
+        );
+
+        const response: Record<string, unknown> = {
+          documents,
+          totalMatched: totalCount,
+          returned,
+          truncated: continuation !== undefined,
+          ...(continuation ? { continuation } : {}),
+          ...(breakdown ? { breakdown } : {}),
+          _meta: { sourceTables: ["t_document", "t_object"] },
+        };
+
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(response, null, 2) }],
+        };
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        return {
+          content: [{ type: "text" as const, text: `Error listing documents: ${msg}` }],
           isError: true,
         };
       }
