@@ -49,8 +49,9 @@ function extractZipEntry(buf: Buffer, entryName: string): Buffer | null {
 /** Strip RTF to plain text. */
 function stripRtf(rtf: Buffer): string {
   let text = rtf.toString("latin1");
-  // Unicode escapes \uNNNN
-  text = text.replace(/\\u(-?\d+)\??/g, (_, n) => {
+  // Unicode escapes \uNNNN — also consume the optional \'NN hex fallback
+  // that follows (RTF emits both: \u225 \'e1 for non-Unicode-aware readers)
+  text = text.replace(/\\u(-?\d+)\??\s*\\'(?:[0-9a-fA-F]{2})?/g, (_, n) => {
     const code = parseInt(n);
     return String.fromCharCode(code >= 0 ? code & 0xFFFF : code + 0x10000);
   });
