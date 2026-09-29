@@ -179,7 +179,7 @@ export class ModelSession implements ModelAccess {
     try {
       result = await this.server.server.elicitInput(
         {
-          message: `${reason} Where is your .qea export?`,
+          message: `${reason} Where is your .qea or .eap file?`,
           requestedSchema: {
             type: "object",
             properties: {
@@ -187,8 +187,8 @@ export class ModelSession implements ModelAccess {
                 type: "string",
                 title: "Model path",
                 description:
-                  "Full path to a .qea file, or to a folder containing one — " +
-                  "the newest .qea in that folder is used.",
+                  "Full path to a .qea or .eap file, or to a folder containing one — " +
+                  "the newest model file in that folder is used.",
               },
             },
             required: ["qea_path"],

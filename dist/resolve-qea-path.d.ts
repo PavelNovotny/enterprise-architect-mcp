@@ -22,5 +22,5 @@ export interface QeaPathOrigin extends QeaPathCandidate {
  * (substituted as "") drops out here.
  */
 export declare function listQeaPathCandidates(cliArg?: string): QeaPathCandidate[];
-/** Turns a configured value into a concrete .qea file path. */
+/** Turns a configured value into a concrete model file path (.qea or .eap). */
 export declare function resolveQeaTarget(target: string): string;

@@ -1,3 +1,4 @@
+import { getOriginalPath } from "../database.js";
 import { describeSource } from "../model-session.js";
 import { READ_ONLY } from "./annotations.js";
 import { z } from "zod";
@@ -102,7 +103,8 @@ export function configureSchemaTools(server, model) {
     server.tool("ea_get_model_info", "Report which .qea export file the server has open: `fileName` is the citable identity, alongside `fileSizeBytes`, `lastModified`, and the `serverVersion` that produced the answer. The full local path is also returned as `resolvedPath`, with `resolvedPathNote` explaining why it is environment detail rather than something to cite. `configuration` says where that path came from — `source` in words, `sourceId` as one of argument/environment/dotenv/remembered/prompt, and the `configured` value behind it — plus any `skipped` settings, each with the `reason` it could not be opened, and `shadowed` ones a higher-priority source outranked; `configurationNote` says how much of that is safe to repeat.", {}, READ_ONLY, async () => {
         const db = await model.database();
         try {
-            const location = db.location();
+            // For .eap files, the database is a temp SQLite file — report the original path instead.
+            const location = getOriginalPath() ?? db.location();
             if (!location) {
                 return {
                     content: [

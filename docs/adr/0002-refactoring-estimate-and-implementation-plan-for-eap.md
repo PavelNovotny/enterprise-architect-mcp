@@ -18,7 +18,7 @@ tags:
 
 ## Status
 
-**Proposed** — awaiting decision on approach.
+**Accepted** — Part 1 (hybrid EAP→SQLite conversion) implemented and tested.
 
 ## Context
 

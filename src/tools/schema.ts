@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Database } from "../database.js";
+import { getOriginalPath } from "../database.js";
 import { describeSource, type ModelAccess } from "../model-session.js";
 import { READ_ONLY } from "./annotations.js";
 import { z } from "zod";
@@ -144,7 +145,8 @@ export function configureSchemaTools(server: McpServer, model: ModelAccess): voi
     async () => {
       const db = await model.database();
       try {
-        const location = (db as any).location() as string | null;
+        // For .eap files, the database is a temp SQLite file — report the original path instead.
+        const location = getOriginalPath() ?? (db as any).location() as string | null;
         if (!location) {
           return {
             content: [

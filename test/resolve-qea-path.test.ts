@@ -168,10 +168,10 @@ describe("resolveQeaTarget", () => {
     expect(resolveQeaTarget("/exports")).toBe(join(dir, "newest.qea"));
   });
 
-  it("throws when directory has no .qea files", () => {
+  it("throws when directory has no model files", () => {
     const dir = resolve("/empty");
     mockDir(dir, []);
-    expect(() => resolveQeaTarget("/empty")).toThrow("No .qea files found");
+    expect(() => resolveQeaTarget("/empty")).toThrow("No .qea or .eap files found");
   });
 
   it("ignores non-.qea files in directory", () => {

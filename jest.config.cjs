@@ -6,7 +6,7 @@ module.exports = {
   testMatch: ["**/?(*.)+(spec|test).[jt]s?(x)"],
   clearMocks: true,
   transform: {
-    "^.+\\.tsx?$": [
+    "^.+\\.(tsx?|mjs|js)$": [
       "ts-jest",
       {
         tsconfig: "tsconfig.test.json",
@@ -17,6 +17,9 @@ module.exports = {
       },
     ],
   },
+  transformIgnorePatterns: [
+    "node_modules/(?!mdb-reader)",
+  ],
   moduleNameMapper: {
     "^(\\.{1,2}/.*)\\.js$": "$1",
   },

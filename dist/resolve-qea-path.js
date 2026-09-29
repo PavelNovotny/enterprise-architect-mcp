@@ -15,7 +15,7 @@ export function listQeaPathCandidates(cliArg) {
     ];
     return candidates.filter((c) => c.configured !== undefined);
 }
-/** Turns a configured value into a concrete .qea file path. */
+/** Turns a configured value into a concrete model file path (.qea or .eap). */
 export function resolveQeaTarget(target) {
     const resolved = resolve(target);
     if (!existsSync(resolved)) {
@@ -23,20 +23,20 @@ export function resolveQeaTarget(target) {
         throw new Error(`Path not found: "${resolved}"`);
     }
     if (statSync(resolved).isDirectory()) {
-        return findNewestQea(resolved);
+        return findNewestModel(resolved);
     }
     return resolved;
 }
-function findNewestQea(dir) {
+function findNewestModel(dir) {
     const files = readdirSync(dir)
-        .filter((f) => f.endsWith(".qea"))
+        .filter((f) => f.endsWith(".qea") || f.endsWith(".eap") || f.endsWith(".eapx"))
         .map((f) => {
         const fullPath = join(dir, f);
         return { path: fullPath, mtime: statSync(fullPath).mtimeMs };
     })
         .sort((a, b) => b.mtime - a.mtime);
     if (files.length === 0) {
-        throw new Error(`No .qea files found in directory: "${dir}"`);
+        throw new Error(`No .qea or .eap files found in directory: "${dir}"`);
     }
     return files[0].path;
 }
