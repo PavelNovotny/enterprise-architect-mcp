@@ -33,3 +33,4 @@ eval/agent-results.json
 # Scratch state for one-off eval/agent-campaign.ts runs
 .campaign-tmp/
 .env
+docs/temp

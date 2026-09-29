@@ -5,3 +5,9 @@ export const READ_ONLY: ToolAnnotations = {
   readOnlyHint: true,
   openWorldHint: false,
 };
+
+/** The tool writes files to the local filesystem (the model itself is not modified). */
+export const WRITE_FILESYSTEM: ToolAnnotations = {
+  readOnlyHint: false,
+  openWorldHint: false,
+};

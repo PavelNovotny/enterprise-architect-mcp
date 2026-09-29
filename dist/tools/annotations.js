@@ -3,3 +3,8 @@ export const READ_ONLY = {
     readOnlyHint: true,
     openWorldHint: false,
 };
+/** The tool writes files to the local filesystem (the model itself is not modified). */
+export const WRITE_FILESYSTEM = {
+    readOnlyHint: false,
+    openWorldHint: false,
+};

@@ -1,7 +1,9 @@
-import { READ_ONLY } from "./annotations.js";
+import { READ_ONLY, WRITE_FILESYSTEM } from "./annotations.js";
 import { z } from "zod";
 import { decodeEntities } from "../text.js";
 import { inflateRawSync } from "node:zlib";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { limitParam, offsetParam, buildContinuation, buildBreakdown, countBy } from "./windowing.js";
 /** Detect document format from the BLOB, peering inside ZIP for EA's RTF-in-ZIP. */
 function detectFormat(buf) {
@@ -89,6 +91,13 @@ function extractContent(buf) {
         }
     }
     return null;
+}
+/** Replace characters invalid in filenames and ensure an extension. */
+function sanitizeFilename(name, ext) {
+    let safe = name.replace(/[/\\:*?"<>|]/g, "_");
+    if (!/\.[a-zA-Z0-9]+$/.test(safe))
+        safe += ext;
+    return safe;
 }
 export function configureDocumentTools(server, model) {
     server.tool("ea_get_documents", "Get embedded documents linked to an Enterprise Architect element. Documents are stored in `t_document` and linked via the element's `ea_guid`. Returns `DocName`, `DocType`, `Author`, `Version`, `Notes`, `StrContent` (text documents), and `hasBinaryContent` (whether `BinContent` is non-null). Set `binary: true` to also return `binContentBase64` (the BLOB as base64) and `detectedFormat` (`docx`, `doc`, `rtf`, or `unknown`). Set `content: true` to extract and return `textContent` (plain text) from binary documents — EA stores embedded documents as RTF inside a ZIP, which is unzipped and stripped to plain text.", {
@@ -237,6 +246,77 @@ export function configureDocumentTools(server, model) {
             const msg = error instanceof Error ? error.message : String(error);
             return {
                 content: [{ type: "text", text: `Error listing documents: ${msg}` }],
+                isError: true,
+            };
+        }
+    });
+    server.tool("ea_export_document", "Export embedded documents linked to an Enterprise Architect element to files on disk. The element's `ea_guid` is resolved from `t_object`, then linked rows in `t_document` are written to the output directory. Binary documents (RTF-in-ZIP) are extracted and written as `.rtf` files; text documents are written as `.txt`. Returns a list of exported files with their names, formats, and byte counts.", {
+        elementId: z.coerce.number().describe("The Object_ID of the element whose documents to export"),
+        outputDir: z.string().describe("Absolute path to the target directory. Created if it doesn't exist."),
+    }, WRITE_FILESYSTEM, async ({ elementId, outputDir }) => {
+        const db = await model.database();
+        try {
+            const element = db.prepare("SELECT ea_guid FROM t_object WHERE Object_ID = ?").get(elementId);
+            if (!element) {
+                return {
+                    content: [{ type: "text", text: JSON.stringify({ error: "not_found", message: `Element with ID ${elementId} not found`, elementId }, null, 2) }],
+                    isError: true,
+                };
+            }
+            const rows = db.prepare(`
+          SELECT DocID, DocName, DocType, StrContent, BinContent,
+                 BinContent IS NOT NULL as hasBinaryContent
+          FROM t_document
+          WHERE ElementID = ?
+          ORDER BY Sequence
+        `).all(element.ea_guid);
+            const absDir = resolve(outputDir);
+            mkdirSync(absDir, { recursive: true });
+            const exported = [];
+            const skipped = [];
+            for (const r of rows) {
+                const name = r.DocName || "unnamed";
+                if (r.hasBinaryContent === 1 && r.BinContent) {
+                    const buf = Buffer.from(r.BinContent);
+                    const fmt = detectFormat(buf);
+                    const ext = fmt === "docx" ? ".docx" : fmt === "doc" ? ".doc" : fmt === "rtf" ? ".rtf" : ".bin";
+                    let content;
+                    if (fmt === "rtf") {
+                        const inner = extractZipEntry(buf, "str.dat");
+                        content = inner ?? buf;
+                    }
+                    else {
+                        content = buf;
+                    }
+                    const fileName = sanitizeFilename(name, ext);
+                    writeFileSync(join(absDir, fileName), content);
+                    exported.push({ name, fileName, format: fmt, bytesWritten: content.length });
+                }
+                else if (r.StrContent) {
+                    const fileName = sanitizeFilename(name, ".txt");
+                    writeFileSync(join(absDir, fileName), r.StrContent, "utf8");
+                    exported.push({ name, fileName, format: "text", bytesWritten: Buffer.byteLength(r.StrContent, "utf8") });
+                }
+                else {
+                    skipped.push({ name, reason: "No content (neither binary nor text)" });
+                }
+            }
+            const response = {
+                exported,
+                skipped,
+                outputDir: absDir,
+                totalExported: exported.length,
+                totalSkipped: skipped.length,
+                _meta: { sourceTables: ["t_document", "t_object"] },
+            };
+            return {
+                content: [{ type: "text", text: JSON.stringify(response, null, 2) }],
+            };
+        }
+        catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            return {
+                content: [{ type: "text", text: `Error exporting documents: ${msg}` }],
                 isError: true,
             };
         }

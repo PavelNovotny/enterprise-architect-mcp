@@ -1,4 +1,4 @@
-Status: Proposed
+Status: Done
 Date: 2026-09-29
 
 # Add ea_export_document tool for writing a single embedded document to disk
