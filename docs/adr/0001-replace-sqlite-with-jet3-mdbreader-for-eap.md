@@ -18,7 +18,8 @@ tags:
 
 ## Status
 
-**Proposed** — awaiting spike results on `.EAP` file before acceptance.
+**Proposed** — spike completed successfully (see Spike Results below); awaiting
+decision on acceptance.
 
 ## Context
 
@@ -83,6 +84,93 @@ The spike checks:
 If the spike passes, the full migration proceeds. If it fails, the decision is
 revised (dual-mode or external conversion).
 
+## Spike Results
+
+**Spike script:** `scripts/spike-mdb-reader.mjs`
+**Target file:** `/Users/pavelnovotny/Arch-DD/o2integration/DD/HC-ADAPTER/HC-ADAPTER_Detail-design.EAP`
+**Date:** 2026-09-29
+
+### 1. File opens read-only — PASS
+
+The 2.02 MB `.EAP` file opened with `mdb-reader` (v3.2.0) without error. The
+library reads the file into a `Buffer` and parses it in-memory — no file
+locking, no native dependencies.
+
+### 2. Expected EA tables present — PASS (14/20 exact, 6 renamed)
+
+98 tables found. All core EA tables are present. Six tables from the QEA
+schema have different names in EAP:
+
+| QEA name (expected)     | EAP name (found)         |
+|------------------------|--------------------------|
+| `t_objectoperations`   | `t_operation`            |
+| `t_objectparams`       | `t_operationparams`     |
+| `t_objectefforts`      | `t_objecteffort`        |
+| `t_scenarios`          | `t_objectscenarios`     |
+| `t_secroles`           | `t_secgroup`             |
+| `t_secpolperms`        | `t_secpolicies`          |
+
+These are naming differences, not missing functionality. A table-name mapping
+resolves them.
+
+### 3. Representative queries return correct rows — PASS
+
+All four core tables returned data with the expected EA schema:
+
+- **t_object** — 204 rows, 57 columns (Object_ID, Name, Object_Type, Note,
+  Package_ID, ea_guid, StyleEx, etc.)
+- **t_package** — 27 rows, 23 columns (Package_ID, Name, Parent_ID, ea_guid,
+  XMLPath, etc.)
+- **t_connector** — 223 rows, 79 columns (Connector_ID, Connector_Type,
+  Start_Object_ID, End_Object_ID, StyleEx, etc.)
+- **t_diagram** — 17 rows, 29 columns (Diagram_ID, Package_ID, Diagram_Type,
+  Name, etc.)
+
+### 4. Read performance — PASS (small file)
+
+- Full `t_object` read (204 rows): **2.7 ms** (0.013 ms/row)
+- In-memory WHERE filter on `t_object`: **2.2 ms**
+- In-memory JOIN `t_object` × `t_connector`: **8.6 ms** (223 connectors
+  matched against 204 objects)
+
+Performance on this 2 MB file is excellent. Scaling to production-sized files
+(100 MB+) is untested — see Open Questions below.
+
+### 5. Table-only access (no SQL) — KEY FINDING
+
+**`mdb-reader` has no SQL engine.** It provides `getTable(name).getData()` —
+full table reads with optional column selection and row offset/limit. There
+is no `WHERE`, `JOIN`, `ORDER BY`, `GROUP BY`, or prepared statements.
+
+The current codebase is built entirely on `db.prepare(SQL).get/all()` — every
+tool module constructs SQL strings with parameterized queries. A migration to
+`mdb-reader` requires one of:
+
+- **A. In-memory query layer** — read full tables into JS arrays, filter/join/
+  sort with JavaScript. Simple but memory-intensive on large tables, and
+  every query becomes a full table scan.
+- **B. Hybrid approach** — use `mdb-reader` to open the file, but export
+  to a temporary SQLite database on first open, then query with `node:sqlite`
+  as today. Best of both worlds, but adds conversion latency on open.
+- **C. Different library** — find a JET3 reader with SQL support (none found
+  in the npm ecosystem; `mdb-reader` is the only maintained option).
+
+### Summary
+
+| Check                     | Result |
+|--------------------------|--------|
+| File opens               | PASS   |
+| Core tables present      | PASS   |
+| Data returns correctly   | PASS   |
+| Performance (2 MB file)  | PASS   |
+| SQL support              | FAIL — no SQL engine, table-only access |
+
+**Verdict:** `mdb-reader` can read `.EAP` files, but it is not a drop-in
+replacement for `node:sqlite`. The SQL-to-table-only gap is the primary
+architectural risk. Option B (hybrid: EAP → temp SQLite → existing SQL layer)
+may be the most pragmatic path — it preserves all existing tool code and
+only changes `database.ts` to detect `.EAP` and convert on open.
+
 ## Consequences
 
 **Positive:**
@@ -93,30 +181,35 @@ revised (dual-mode or external conversion).
 
 **Negative:**
 
-- Introduces a new dependency (MDBReader or equivalent JET3 driver) — needs
-  evaluation for Node 25 compatibility, maintenance status, and packaging.
-- JET3 SQL dialect may differ from SQLite in subtle ways (string functions,
-  date handling, `LIKE` behavior) — existing queries in `src/tools/` may need
-  adjustment.
-- Read performance characteristics change — JET3 over MDB is not the same as
-  SQLite with a 64 MB page cache. The current `PRAGMA cache_size` tuning is
-  SQLite-specific and has no JET3 equivalent.
-- `node:sqlite`'s synchronous API model (`DatabaseSync`) may not have a direct
-  JET3 equivalent — the access pattern may need to become async, affecting every
-  tool handler.
+- `mdb-reader` has **no SQL engine** — it reads tables, not queries. The entire
+  tool layer (`src/tools/`) is built on `db.prepare(SQL).get/all()` with
+  parameterized queries, joins, and WHERE clauses. A migration requires either
+  an in-memory query layer (Option A) or a hybrid EAP→SQLite conversion
+  (Option B — recommended, see Decision section update below).
+- Introduces a new dependency (`mdb-reader`) — compatible with Node 25, pure
+  JS (no native compilation), actively maintained, MIT licensed.
+- Read performance on production-sized files (100 MB+) is untested — the spike
+  used a 2 MB file. `mdb-reader` loads the entire file into a `Buffer`, so
+  memory usage scales with file size.
+- `node:sqlite`'s synchronous API model (`DatabaseSync`) has no direct
+  `mdb-reader` equivalent — `getData()` is synchronous but returns all rows
+  at once, not a prepared statement cursor.
 - The solution doc `docs/solutions/tooling-decisions/node-sqlite-over-better-sqlite3.md`
   becomes historical context only; a new solution doc for the JET3 driver choice
   would be needed.
-- `.qea` (SQLite) support is dropped. If any workflow depends on `.qea` files,
-  that path breaks.
+- Six table names differ between EAP and QEA (see Spike Results table mapping).
+- `.qea` (SQLite) support is dropped if Option 1 is taken. If any workflow
+  depends on `.qea` files, that path breaks.
 
 **Follow-up work:**
 
-- Spike on the `.EAP` file above (gate for the rest).
-- Abstract the database interface so `src/database.ts` returns a common query
-  API regardless of the underlying engine — protects against future format
-  changes and makes a dual-mode fallback possible if needed later.
-- Audit all SQL queries in `src/tools/` for SQLite-specific syntax.
+- ~~Spike on the `.EAP` file above~~ — DONE, see Spike Results.
+- Decide between Option A (in-memory query layer) and Option B (hybrid
+  EAP→temp SQLite conversion). Option B is recommended: it preserves all
+  existing tool code unchanged and confines the change to `database.ts`.
+- Implement the chosen approach in `src/database.ts`.
+- Create a table-name mapping for the 6 renamed tables (EAP → QEA names).
+- Benchmark on a production-sized `.EAP` file (100 MB+).
 - Update `docs/solutions/architecture-patterns/mcp-server-readonly-sqlite-architecture.md`
   or write a successor for the JET3 architecture.
 - Update `README.md` and `CONCEPTS.md` to reflect `.EAP` as the primary format.
@@ -142,5 +235,8 @@ Only viable if the JET3 spike fails entirely.
 - Current DB driver decision: `docs/solutions/tooling-decisions/node-sqlite-over-better-sqlite3.md`
 - Database module: `src/database.ts`
 - Session / path resolution: `src/model-session.ts`
+- Spike script: `scripts/spike-mdb-reader.mjs`
 - Spike target file: `/Users/pavelnovotny/Arch-DD/o2integration/DD/HC-ADAPTER/HC-ADAPTER_Detail-design.EAP`
+- `mdb-reader` on npm: https://www.npmjs.com/package/mdb-reader
+- `mdb-reader` on GitHub: https://github.com/andipaetzold/mdb-reader
 - ADR template: `docs/adr/0000-template.md`
