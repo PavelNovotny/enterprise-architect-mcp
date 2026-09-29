@@ -171,6 +171,7 @@ not open is never remembered, so asking again is enough to correct a mistyped an
 | `ea_resolve` | Resolve analyst references (braced GUID or plain name) to model candidates with full package path. Falls back to name-prefix matching for analyst codes; every candidate carries a `match` of `guid`, `exact`, or `prefix`. |
 | `ea_get_schema` | Introspect the model's database schema — tables, columns, indexes, rowid alias. |
 | `ea_get_model_info` | Identity of the open export — file name, size, modification date, server version, and which configuration source the path came from. |
+| `ea_find_models` | Recursively scan a directory for `.eap`/`.eapx`/`.qea` files at any depth, matched case-insensitively. Use to enumerate candidates before `ea_switch_model` when a root directory is known but the specific file is not. Does not open or touch the current model. |
 
 ### Response contract
 

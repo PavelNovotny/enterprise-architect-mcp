@@ -9,11 +9,18 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { DatabaseSync } from "node:sqlite";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { configureAllTools } from "../src/tools";
 import { createTestDb, staticModel, TestDb } from "./helpers/test-db";
 
 let client: Client;
 let testDb: TestDb;
+
+/** A root ea_find_models can walk — one model file is enough for this contract. */
+const FIND_MODELS_ROOT = mkdtempSync(join(tmpdir(), "ea-find-models-contract-"));
+writeFileSync(join(FIND_MODELS_ROOT, "model.qea"), "");
 
 beforeAll(async () => {
   testDb = createTestDb();
@@ -27,7 +34,10 @@ beforeAll(async () => {
   await client.connect(clientTransport);
 });
 
-afterAll(() => { testDb.cleanup(); });
+afterAll(() => {
+  testDb.cleanup();
+  rmSync(FIND_MODELS_ROOT, { recursive: true, force: true });
+});
 
 async function callTool(name: string, args: Record<string, unknown> = {}) {
   const result = await client.callTool({ name, arguments: args });
@@ -50,6 +60,7 @@ const validCalls: [string, Record<string, unknown>][] = [
   ["ea_get_schema", {}],
   ["ea_get_schema", { tableName: "t_object" }],
   ["ea_get_model_info", {}],
+  ["ea_find_models", { root: FIND_MODELS_ROOT }],
 ];
 
 // Calls with non-existent subjects that should return isError:true
@@ -111,7 +122,7 @@ describe("Response shape contract — empty results are structured, not text", (
  * results, because every other tool returns a set small enough to hand over whole.
  * Driven off validCalls so a tool added later is covered the day it appears.
  */
-const PAGED_TOOLS = new Set(["ea_search", "ea_search_and_any_of", "ea_list_elements", "ea_list_diagrams"]);
+const PAGED_TOOLS = new Set(["ea_search", "ea_search_and_any_of", "ea_list_elements", "ea_list_diagrams", "ea_find_models"]);
 
 describe("Response shape contract — the window stays with the enumeration tools", () => {
   test.each(validCalls.filter(([tool]) => !PAGED_TOOLS.has(tool)))(

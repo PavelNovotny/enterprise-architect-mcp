@@ -15,8 +15,23 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { chmodSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { configureAllTools } from "../src/tools";
 import { createTestDb, staticModel, TestDb } from "./helpers/test-db";
+
+/**
+ * A root with a model file at two depths and one unreadable directory, so
+ * ea_find_models has something to walk and something to report as skipped.
+ */
+const FIND_MODELS_ROOT = mkdtempSync(join(tmpdir(), "ea-find-models-"));
+mkdirSync(join(FIND_MODELS_ROOT, "sub"), { recursive: true });
+writeFileSync(join(FIND_MODELS_ROOT, "top.qea"), "");
+writeFileSync(join(FIND_MODELS_ROOT, "sub", "nested.EAP"), "");
+const FIND_MODELS_LOCKED = join(FIND_MODELS_ROOT, "locked");
+mkdirSync(FIND_MODELS_LOCKED);
+chmodSync(FIND_MODELS_LOCKED, 0o000);
 
 let server: McpServer;
 let client: Client;
@@ -73,6 +88,9 @@ const SAMPLE_CALLS: [string, Record<string, unknown>][] = [
   ["ea_get_schema", {}],
   ["ea_get_schema", { tableName: "t_object" }],
   ["ea_get_model_info", {}],
+  ["ea_find_models", { root: FIND_MODELS_ROOT }],
+  // A truncated window, so the continuation branch is inspected too.
+  ["ea_find_models", { root: FIND_MODELS_ROOT, limit: 1 }],
 ];
 
 beforeAll(async () => {
@@ -102,6 +120,8 @@ afterAll(async () => {
   await client.close();
   await server.close();
   testDb.cleanup();
+  chmodSync(FIND_MODELS_LOCKED, 0o755);
+  rmSync(FIND_MODELS_ROOT, { recursive: true, force: true });
 });
 
 async function responseOf(name: string, args: Record<string, unknown>) {

@@ -69,7 +69,7 @@ Do NOT use ea_* tools for:
 
 Typical workflow: ea_search → ea_get_element → ea_get_connectors / ea_get_scenarios
 Reference resolution: ea_resolve (GUID or name) → ea_get_element or ea_get_diagram_elements
-Discovery: ea_list_diagrams to find diagrams, ea_get_schema to explore the model's tables
+Discovery: ea_list_diagrams to find diagrams, ea_get_schema to explore the model's tables, ea_find_models to locate .eap/.qea files under a directory
 Provenance: ea_get_model_info to identify the export file`,
   }
 );
