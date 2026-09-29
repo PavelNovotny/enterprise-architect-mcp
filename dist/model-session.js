@@ -62,6 +62,23 @@ export class ModelSession {
         });
         return this.opening;
     }
+    async switchModel(path) {
+        // Close the current database if open
+        if (this.db) {
+            try {
+                this.db.close();
+            }
+            catch { /* best effort */ }
+            this.db = undefined;
+            this.opened = undefined;
+        }
+        const resolved = resolveQeaTarget(path);
+        const db = openDatabase(resolved);
+        this.db = db;
+        this.opened = { source: "prompt", configured: path, ignored: [], shadowed: [] };
+        console.error(`mcp-server-ea: switched to "${resolved}"`);
+        return db;
+    }
     candidates() {
         const configured = listQeaPathCandidates(this.cliArg);
         const remembered = readRememberedPath();

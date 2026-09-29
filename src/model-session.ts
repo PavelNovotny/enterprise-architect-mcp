@@ -25,6 +25,7 @@ const HOW_TO_CONFIGURE =
 export interface ModelAccess {
   database(): Promise<Database>;
   origin(): QeaPathOrigin | undefined;
+  switchModel(path: string): Promise<Database>;
 }
 
 export function describeSource(source: QeaPathSource): string {
@@ -87,6 +88,22 @@ export class ModelSession implements ModelAccess {
       this.opening = undefined;
     });
     return this.opening;
+  }
+
+  async switchModel(path: string): Promise<Database> {
+    // Close the current database if open
+    if (this.db) {
+      try { this.db.close(); } catch { /* best effort */ }
+      this.db = undefined;
+      this.opened = undefined;
+    }
+
+    const resolved = resolveQeaTarget(path);
+    const db = openDatabase(resolved);
+    this.db = db;
+    this.opened = { source: "prompt" as const, configured: path, ignored: [], shadowed: [] };
+    console.error(`mcp-server-ea: switched to "${resolved}"`);
+    return db;
   }
 
   private candidates(): QeaPathCandidate[] {

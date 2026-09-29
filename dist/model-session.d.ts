@@ -5,6 +5,7 @@ import { type QeaPathOrigin, type QeaPathSource } from "./resolve-qea-path.js";
 export interface ModelAccess {
     database(): Promise<Database>;
     origin(): QeaPathOrigin | undefined;
+    switchModel(path: string): Promise<Database>;
 }
 export declare function describeSource(source: QeaPathSource): string;
 export declare class ModelSession implements ModelAccess {
@@ -20,6 +21,7 @@ export declare class ModelSession implements ModelAccess {
     /** Startup diagnostics only: reports what is configured without opening anything. */
     reportConfiguration(): void;
     database(): Promise<Database>;
+    switchModel(path: string): Promise<Database>;
     private candidates;
     private open;
     /** Opens a candidate and, on success, makes it this session's model. */
