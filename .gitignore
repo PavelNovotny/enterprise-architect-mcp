@@ -11,6 +11,7 @@ coverage/
 # Deliberately narrower than .github/ so .github/workflows/ stays committable.
 .github/skills/
 
+.proxyai/
 # Source maps, should tsc ever emit them. The compiled dist/ output is committed
 # on purpose, because npx runs the published package straight from it.
 *.js.map
